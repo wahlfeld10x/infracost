@@ -6,6 +6,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const (
+	vendorName = "azure"
+)
+
 func strPtr(s string) *string {
 	return &s
 }
