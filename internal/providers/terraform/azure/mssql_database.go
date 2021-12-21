@@ -12,17 +12,52 @@ import (
 	"github.com/infracost/infracost/internal/schema"
 )
 
-func GetAzureRMMSSQLDatabaseRegistryItem() *schema.RegistryItem {
+var (
+	sqlTierMapping = map[string]string{
+		"GP":   "General Purpose",
+		"GP_S": "General Purpose - Serverless",
+		"HS":   "Hyperscale",
+		"BC":   "Business Critical",
+	}
+
+	sqlFamilyMapping = map[string]string{
+		"Gen5": "Compute Gen5",
+		"Gen4": "Compute Gen4",
+		"M":    "Compute M Series",
+	}
+
+	dtuMap = dtuMapping{
+		"free":  true,
+		"basic": true,
+
+		"s": true, // covers Standard, System editions
+		"d": true, // covers DataWarehouse editions
+		"p": true, // covers Premium editions
+	}
+)
+
+type dtuMapping map[string]bool
+
+func (d dtuMapping) usesDTUUnits(sku string) bool {
+	sanitized := strings.ToLower(sku)
+	if d[sanitized] {
+		return true
+	}
+
+	return d[sanitized[0:1]]
+}
+
+func getAzureRMMSSQLDatabaseRegistryItem() *schema.RegistryItem {
 	return &schema.RegistryItem{
 		Name:  "azurerm_mssql_database",
-		RFunc: NewAzureRMMSSQLDatabase,
+		RFunc: newAzureRMMSSQLDatabase,
 		ReferenceAttributes: []string{
 			"server_id",
 		},
 	}
 }
 
-func NewAzureRMMSSQLDatabase(d *schema.ResourceData, u *schema.UsageData) *schema.Resource {
+func newAzureRMMSSQLDatabase(d *schema.ResourceData, u *schema.UsageData) *schema.Resource {
 	region := lookupRegion(d, []string{"server_id"})
 
 	var sku string
@@ -47,8 +82,7 @@ func NewAzureRMMSSQLDatabase(d *schema.ResourceData, u *schema.UsageData) *schem
 		licenceType = d.Get("license_type").String()
 	}
 
-	skuLower := strings.ToLower(sku)
-	r := &azure.MSSQLDatabase{
+	r := &azure.SQLDatabase{
 		Address:          d.Address,
 		Region:           region,
 		SKU:              sku,
@@ -58,7 +92,7 @@ func NewAzureRMMSSQLDatabase(d *schema.ResourceData, u *schema.UsageData) *schem
 		ZoneRedundant:    d.Get("zone_redundant").Bool(),
 	}
 
-	if skuLower != "basic" && !strings.HasPrefix(skuLower, "s") && !strings.HasPrefix(skuLower, "p") {
+	if !dtuMap.usesDTUUnits(sku) {
 		c, err := parseMSSQLSku(d.Address, sku)
 		if err != nil {
 			log.Warnf(err.Error())
@@ -75,9 +109,10 @@ func NewAzureRMMSSQLDatabase(d *schema.ResourceData, u *schema.UsageData) *schem
 }
 
 type skuConfig struct {
+	sku    string
 	tier   string
 	family string
-	cores  int64
+	cores  *int64
 }
 
 func parseMSSQLSku(address, sku string) (skuConfig, error) {
@@ -87,22 +122,13 @@ func parseMSSQLSku(address, sku string) (skuConfig, error) {
 	}
 
 	tierKey := strings.Join(s[0:len(s)-2], "_")
-	tier, ok := map[string]string{
-		"GP":   "General Purpose",
-		"GP_S": "General Purpose - Serverless",
-		"HS":   "Hyperscale",
-		"BC":   "Business Critical",
-	}[tierKey]
+	tier, ok := sqlTierMapping[tierKey]
 	if !ok {
 		return skuConfig{}, fmt.Errorf("Invalid tier in MSSQL SKU for resource %s: %s", address, sku)
 	}
 
 	familyKey := s[len(s)-2]
-	family, ok := map[string]string{
-		"Gen5": "Compute Gen5",
-		"Gen4": "Compute Gen4",
-		"M":    "Compute M Series",
-	}[familyKey]
+	family, ok := sqlFamilyMapping[familyKey]
 	if !ok {
 		return skuConfig{}, fmt.Errorf("Invalid family in MSSQL SKU for resource %s: %s", address, sku)
 	}
@@ -113,8 +139,9 @@ func parseMSSQLSku(address, sku string) (skuConfig, error) {
 	}
 
 	return skuConfig{
+		sku:    sku,
 		tier:   tier,
 		family: family,
-		cores:  cores,
+		cores:  &cores,
 	}, nil
 }

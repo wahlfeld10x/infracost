@@ -69,7 +69,7 @@ var ResourceRegistry []*schema.RegistryItem = []*schema.RegistryItem{
 	GetAzureRMLinuxVirtualMachineScaleSetRegistryItem(),
 	GetAzureRMManagedDiskRegistryItem(),
 	GetAzureRMMariaDBServerRegistryItem(),
-	GetAzureRMMSSQLDatabaseRegistryItem(),
+	getAzureRMMSSQLDatabaseRegistryItem(),
 	GetAzureRMMySQLServerRegistryItem(),
 	GetAzureRMNotificationHubNamespaceRegistryItem(),
 	getAzureRMPointToSiteVpnGatewayRegistryItem(),
@@ -100,6 +100,7 @@ var ResourceRegistry []*schema.RegistryItem = []*schema.RegistryItem{
 	GetAzureRMWindowsVirtualMachineScaleSetRegistryItem(),
 	getAzureRMVPNGatewayRegistryItem(),
 	getAzureRMVPNGatewayConnectionRegistryItem(),
+	getSQLDatabaseRegistryItem(),
 }
 
 // FreeResources grouped alphabetically
